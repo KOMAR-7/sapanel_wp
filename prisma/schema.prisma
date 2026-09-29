@@ -1,0 +1,551 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("CONTROL_PLANE_DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum PlatformRole {
+  PLATFORM_SUPER_ADMIN
+  PLATFORM_ADMIN
+  PLATFORM_SUPPORT
+  PLATFORM_VIEWER
+}
+
+enum TenantStatus {
+  PENDING
+  PROVISIONING
+  ACTIVE
+  GRACE_PERIOD
+  SUSPENDED
+  EXPIRED
+  CANCELLED
+  ARCHIVED
+}
+
+enum IsolationMode {
+  DEDICATED_DATABASE
+  SHARED_DATABASE
+  SHARED_CLUSTER
+}
+
+enum DatabaseProviderType {
+  RENDER
+  AWS_RDS
+  AWS_AURORA
+  LOCAL
+  OTHER
+}
+
+enum DatabaseStatus {
+  PENDING
+  CONNECTING
+  CONNECTED
+  UNHEALTHY
+  DISCONNECTED
+  MIGRATION_REQUIRED
+  ARCHIVED
+}
+
+enum SchemaStatus {
+  VALID
+  PARTIAL
+  OUTDATED
+  UNKNOWN
+}
+
+enum HostingProvider {
+  VERCEL
+  AWS
+  RENDER
+  OTHER
+}
+
+enum DeploymentStatus {
+  ACTIVE
+  DEPLOYING
+  FAILED
+  STOPPED
+  UNKNOWN
+}
+
+enum ServerResourceType {
+  AWS_ECS_SERVICE
+  AWS_EC2_INSTANCE
+  AWS_LAMBDA
+  RENDER_SERVICE
+  AWS_RDS_INSTANCE
+  OTHER
+}
+
+enum ResourceHealthStatus {
+  HEALTHY
+  WARNING
+  CRITICAL
+  STOPPED
+  UNKNOWN
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+  CUSTOM
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  GRACE_PERIOD
+  PAST_DUE
+  SUSPENDED
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH
+  UPI
+  CREDIT_CARD
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  DISCONNECTED
+  PENDING
+  ERROR
+}
+
+enum HealthComponent {
+  FRONTEND
+  BACKEND
+  DATABASE
+  WHATSAPP
+  META_CATALOG
+  WEBHOOK
+  REDIS
+  STORAGE
+}
+
+enum ComponentHealthStatus {
+  HEALTHY
+  WARNING
+  ERROR
+  UNKNOWN
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum ProvisioningJobType {
+  CREATE_TENANT
+  REGISTER_DATABASE
+  VERIFY_DATABASE
+  CREATE_DEPLOYMENT
+  CONFIGURE_DOMAIN
+  ENABLE_FEATURES
+  CONNECT_META
+  MIGRATE_DATABASE
+}
+
+enum ProvisioningJobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+model PlatformAdmin {
+  id           String       @id @default(uuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  role         PlatformRole @default(PLATFORM_ADMIN)
+  isActive     Boolean      @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  auditLogs       AuditLog[]
+  assignedTickets SupportTicket[]
+
+  @@index([email])
+  @@index([role, isActive])
+}
+
+model Tenant {
+  id            String        @id @default(uuid())
+  tenantCode    String        @unique // e.g. SPICE-001
+  name          String        // e.g. Spice Route
+  slug          String        @unique // e.g. spice-route
+  ownerName     String
+  ownerEmail    String
+  ownerPhone    String
+  status        TenantStatus  @default(ACTIVE)
+  isolationMode IsolationMode @default(DEDICATED_DATABASE)
+  environment   String        @default("production") // production, staging, development
+
+  validFrom DateTime?
+  validUntil DateTime?
+  timezone   String    @default("Asia/Kolkata")
+  country    String    @default("India")
+  state      String?
+  city       String?
+  address    String?
+  pincode    String?
+
+  frontendUrl  String?
+  backendUrl   String?
+  customDomain String?
+  subdomain    String? @unique
+  logoUrl      String?
+  notes        String? @db.Text
+
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  databases        TenantDatabase[]
+  deployments      Deployment[]
+  serverResources  ServerResource[]
+  features         TenantFeature[]
+  subscriptions    TenantSubscription[]
+  payments         Payment[]
+  domains          Domain[]
+  metaIntegration  MetaIntegration?
+  usageSnapshots   UsageSnapshot[]
+  healthChecks     HealthCheck[]
+  auditLogs        AuditLog[]
+  supportTickets   SupportTicket[]
+  provisioningJobs ProvisioningJob[]
+
+  @@index([status])
+  @@index([slug])
+  @@index([tenantCode])
+}
+
+model TenantDatabase {
+  id              String               @id @default(uuid())
+  tenantId        String
+  provider        DatabaseProviderType @default(RENDER)
+  engine          String               @default("POSTGRESQL")
+  host            String
+  port            Int                  @default(5432)
+  databaseName    String
+  username        String?
+  secretReference String
+  region          String               @default("Singapore")
+  environment     String               @default("production")
+  status          DatabaseStatus       @default(PENDING)
+  schemaStatus    SchemaStatus         @default(UNKNOWN)
+  isPrimary       Boolean              @default(true)
+
+  pgVersion         String?
+  lastLatencyMs     Int?
+  lastHealthCheckAt DateTime?
+  lastError         String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, isPrimary])
+  @@index([status])
+}
+
+model Deployment {
+  id              String           @id @default(uuid())
+  tenantId        String
+  environment     String           @default("production")
+  provider        HostingProvider  @default(VERCEL)
+  frontendUrl     String?
+  backendUrl      String?
+  region          String           @default("Singapore")
+  version         String?          @default("v1.0.0")
+  gitCommit       String?
+  status          DeploymentStatus @default(ACTIVE)
+  lastDeploymentAt DateTime?
+
+  // Future AWS Orchestration metadata
+  ecsClusterArn       String?
+  ecsServiceArn       String?
+  loadBalancerArn     String?
+  targetGroupArn      String?
+  cloudWatchLogGroup  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  serverResources ServerResource[]
+
+  @@index([tenantId])
+}
+
+model ServerResource {
+  id                 String               @id @default(uuid())
+  tenantId           String
+  deploymentId       String?
+  provider           String               // AWS, RENDER, VERCEL
+  region             String               // ap-southeast-1, etc.
+  resourceType       ServerResourceType   @default(RENDER_SERVICE)
+  resourceIdentifier String               // ARN, Service ID, Container ID
+  cpu                String?              // e.g. "0.5 vCPU"
+  memory             String?              // e.g. "1024 MB"
+  storage            String?              // e.g. "20 GB"
+  status             ResourceHealthStatus @default(HEALTHY)
+  lastCheckAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deployment Deployment? @relation(fields: [deploymentId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+}
+
+model Feature {
+  id              String   @id @default(uuid())
+  key             String   @unique // WHATSAPP_ORDERING, LOYALTY, etc.
+  name            String
+  description     String?
+  category        String   @default("COMMERCE") // COMMERCE, MARKETING, OPERATIONS, INTEGRATION
+  isGlobalEnabled Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenantFeatures TenantFeature[]
+
+  @@index([key])
+}
+
+model TenantFeature {
+  id        String   @id @default(uuid())
+  tenantId  String
+  featureId String
+  enabled   Boolean  @default(true)
+  config    String?  @db.Text // JSON configuration overrides
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, featureId])
+  @@index([tenantId])
+}
+
+model SubscriptionPlan {
+  id           String        @id @default(uuid())
+  name         String
+  description  String?
+  price        Decimal       @default(0) @db.Decimal(12,2)
+  currency     String        @default("INR")
+  billingCycle BillingCycle  @default(MONTHLY)
+  maxBranches  Int           @default(1)
+  maxUsers     Int           @default(5)
+  features     String?       @db.Text
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  subscriptions TenantSubscription[]
+}
+
+model TenantSubscription {
+  id        String             @id @default(uuid())
+  tenantId  String
+  planId    String
+  status    SubscriptionStatus @default(ACTIVE)
+  startDate DateTime
+  endDate   DateTime
+  autoRenew Boolean            @default(false)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan     SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  payments Payment[]
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Payment {
+  id                   String        @id @default(uuid())
+  tenantId             String
+  subscriptionId       String?
+  amount               Decimal       @db.Decimal(12,2)
+  currency             String        @default("INR")
+  paymentMethod        PaymentMethod @default(BANK_TRANSFER)
+  transactionReference String?
+  status               PaymentStatus @default(PAID)
+  paidAt               DateTime?     @default(now())
+  dueDate              DateTime?
+  notes                String?       @db.Text
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription TenantSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Domain {
+  id         String   @id @default(uuid())
+  tenantId   String
+  domainName String   @unique
+  isPrimary  Boolean  @default(false)
+  isVerified Boolean  @default(false)
+  sslStatus  String   @default("ACTIVE") // ACTIVE, PENDING, FAILED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model MetaIntegration {
+  id                   String            @id @default(uuid())
+  tenantId             String            @unique
+  provider             String            @default("META_WHATSAPP")
+  phoneNumberId        String?           // Masked in UI
+  businessAccountId    String?
+  catalogId            String?
+  status               IntegrationStatus @default(CONNECTED)
+  tokenSecretReference String?           // Secret Manager / env reference, NEVER plaintext token
+  lastSyncAt           DateTime?
+  lastWebhookAt        DateTime?
+  lastError            String?           @db.Text
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model UsageSnapshot {
+  id                    String   @id @default(uuid())
+  tenantId              String
+  branchesCount         Int      @default(0)
+  categoriesCount       Int      @default(0)
+  itemsCount            Int      @default(0)
+  customersCount        Int      @default(0)
+  ordersCount           Int      @default(0)
+  ordersToday           Int      @default(0)
+  ordersThisMonth       Int      @default(0)
+  whatsappMessagesCount Int      @default(0)
+  campaignsCount        Int      @default(0)
+  dbSizeBytes           Float?
+  dbConnections         Int?
+  snapshotAt            DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, snapshotAt])
+}
+
+model HealthCheck {
+  id         String                @id @default(uuid())
+  tenantId   String
+  component  HealthComponent
+  status     ComponentHealthStatus @default(HEALTHY)
+  latencyMs  Int?
+  message    String?
+  checkedAt  DateTime              @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, component])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  adminId      String?
+  tenantId     String?
+  action       String   // CREATE_TENANT, SUSPEND_TENANT, EXTEND_VALIDITY, ENABLE_FEATURE, TEST_DB, etc.
+  resourceType String   // TENANT, DATABASE, SUBSCRIPTION, FEATURE, PAYMENT, META
+  resourceId   String?
+  oldValue     String?  @db.Text // JSON snapshot (sanitized, no secrets)
+  newValue     String?  @db.Text // JSON snapshot (sanitized, no secrets)
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  admin  PlatformAdmin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  tenant Tenant?        @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([adminId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model SupportTicket {
+  id              String         @id @default(uuid())
+  tenantId        String
+  title           String
+  description     String         @db.Text
+  priority        TicketPriority @default(MEDIUM)
+  status          TicketStatus   @default(OPEN)
+  assignedTo      String?
+  resolutionNotes String?        @db.Text
+  resolvedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignee PlatformAdmin? @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model ProvisioningJob {
+  id          String                @id @default(uuid())
+  tenantId    String
+  type        ProvisioningJobType
+  status      ProvisioningJobStatus @default(PENDING)
+  progress    Int                   @default(0) // 0 - 100%
+  message     String?
+  error       String?               @db.Text
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime              @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+}

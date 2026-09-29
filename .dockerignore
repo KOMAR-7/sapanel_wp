@@ -1,0 +1,34 @@
+# Exclude local environment files & secrets
+.env
+.env.*
+!.env.example
+
+# Version control
+.git/
+.gitignore
+
+# Dependencies & Build artifacts
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# System & IDE files
+.DS_Store
+Thumbs.db
+thumbs.db
+.vscode/
+.idea/
+
+# Local tests & documentation (unneeded in production image)
+tests/
+*.tsbuildinfo
