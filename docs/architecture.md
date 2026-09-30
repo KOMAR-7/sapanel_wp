@@ -30,7 +30,7 @@ RESTROCONNECT is designed around a strict decoupling between the **Platform Cont
 | Dimension | Platform Control Plane | Tenant Data Plane |
 |---|---|---|
 | **Audience** | RESTROCONNECT Platform Owners, Admins, Support | Restaurant Staff, Customers, Delivery Drivers |
-| **Database** | Dedicated PostgreSQL (`restroconnect_control_plane`) | Dedicated PostgreSQL per tenant (Render / AWS RDS) |
+| **Database** | Render PostgreSQL (Dedicated `super_admin_restroconnect`) | Dedicated PostgreSQL per tenant (Render / AWS RDS) |
 | **Data Scope** | Tenant metadata, secrets references, licenses, audit trail | Menu items, orders, carts, customers, WhatsApp sessions |
 | **Security Boundary** | High-security internal access, RBAC enforced, IP-logged | Scoped strictly to the specific restaurant |
 | **Isolation Mode** | Centralized governance | `DEDICATED_DATABASE`, `SHARED_DATABASE`, `SHARED_CLUSTER` |

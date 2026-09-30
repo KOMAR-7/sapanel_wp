@@ -40,7 +40,7 @@ This repository houses the **Platform-Level SuperAdmin Control Plane**. It is st
 | Dimension | Platform Control Plane (This App) | Tenant Application |
 |---|---|---|
 | **Audience** | RESTROCONNECT Platform Owners, Admins, Support | Restaurant Staff, Delivery Drivers, Diners |
-| **Database** | `restroconnect_control_plane` (PostgreSQL) | Isolated Tenant PostgreSQL (e.g. Render / AWS RDS) |
+| **Database** | Render PostgreSQL (Dedicated `super_admin_restroconnect` database) | Isolated Tenant PostgreSQL (e.g. Render / AWS RDS) |
 | **Key Models** | `Tenant`, `TenantDatabase`, `Deployment`, `SubscriptionPlan`, `Feature`, `Payment`, `AuditLog` | `Restaurant`, `Branch`, `Order`, `MenuItem`, `Customer`, `WhatsAppCart`, `PointsLedger` |
 | **Data Scope** | Platform metadata, secret references, licensing terms | Real-time menus, active carts, customer PII, POS orders |
 | **Credentials** | Never stores raw passwords in DB or frontend payloads | Isolated database credentials stored in secret references |
@@ -103,7 +103,7 @@ docs/
 
 - **Framework**: Next.js 14 (App Router)
 - **Language**: TypeScript (Strict typing)
-- **Database**: PostgreSQL (`restroconnect_control_plane`)
+- **Database**: Render PostgreSQL (Dedicated Control Plane database `super_admin_restroconnect`)
 - **ORM**: Prisma ORM 5
 - **Authentication**: JWT with `jose`, HTTP-only secure cookies, and bcrypt password hashing
 - **Styling**: Vanilla CSS with custom tokens and dark control plane aesthetics
@@ -123,8 +123,8 @@ PORT=3005
 NEXT_PUBLIC_APP_URL="http://localhost:3005"
 NODE_ENV="development"
 
-# Control Plane Database (PostgreSQL)
-CONTROL_PLANE_DATABASE_URL="postgresql://username:password@localhost:5432/restroconnect_control_plane?schema=public"
+# Control Plane Database (Render PostgreSQL)
+DATABASE_URL="postgresql://username:password@host:5432/database?sslmode=require"
 
 # Platform SuperAdmin Credentials
 SUPERADMIN_NAME="Platform SuperAdmin"
@@ -170,12 +170,13 @@ Visit `http://localhost:3005` and log in with:
 
 ## 8. Database Setup
 
-The SuperAdmin Control Plane requires its own dedicated PostgreSQL database.
-Locally, ensure PostgreSQL is running on port `5432`:
-```sql
-CREATE DATABASE restroconnect_control_plane;
+The SuperAdmin Control Plane is hosted on a dedicated Render PostgreSQL database.
+Configure `DATABASE_URL` in `.env` with your secure connection string:
+```bash
+DATABASE_URL="postgresql://username:password@host:5432/database?sslmode=require"
 ```
-Set `CONTROL_PLANE_DATABASE_URL` in `.env`.
+Prisma automatically connects to this database for all control-plane operations.
+Tenant databases (e.g. Spice Route on Render) remain strictly isolated and untouched.
 
 ---
 
