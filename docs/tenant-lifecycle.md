@@ -210,5 +210,5 @@ All control plane API routes resolve the authenticated administrator session and
 
 > [!IMPORTANT]
 > **Credential Rotation Requirement**:
-> In accordance with Step 5 security cleanup, all hardcoded credentials and passwords previously used in development or staging environments (`RestroPlatform2026!Secure` and database passwords) must be **rotated immediately** in live staging and production environments.
-> All repository files, configuration templates, and documentation now use `<configured-locally>` placeholders.
+> In accordance with Step 5 security cleanup, all credentials previously used in initial development setups or early verification must be **rotated immediately** in live staging and production environments.
+> All repository files, configuration templates, and documentation use `<configured-locally>` placeholders.
